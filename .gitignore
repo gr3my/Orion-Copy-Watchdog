@@ -1,0 +1,34 @@
+# Secrets / local config -- never committed.
+.env
+.env.*
+!.env.example
+
+# Real deployment config (may contain private hostnames).
+watchdog.yml
+
+# .NET build output.
+bin/
+obj/
+.vs/
+TestResults/
+
+# Runtime data.
+logs/
+*.log
+state/
+data/
+*.db
+*.sqlite
+
+# Editor / OS noise.
+.idea/
+.vscode/
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Archives.
+*.zip
+*.rar
+*.7z

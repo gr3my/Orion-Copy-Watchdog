@@ -1,0 +1,18 @@
+# Minimal watchdog: one HTTP endpoint, restart via a command.
+watchdog:
+  check_interval: 15s
+  failure_threshold: 3
+  state_directory: ./state
+  log_level: info
+
+services:
+  - name: My Orion Backend
+    checks:
+      - type: http
+        url: http://127.0.0.1:8080/health
+        expected_status: 200
+        timeout: 5s
+    restart:
+      type: command
+      # Sample script included in this repo; point it at your own script.
+      command: ./examples/scripts/restart-backend.sh

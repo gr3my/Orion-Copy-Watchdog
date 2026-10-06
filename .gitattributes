@@ -1,0 +1,7 @@
+# Keep shell scripts LF-only on every platform (Windows editors and git
+# autocrlf must not inject CRLF, which breaks `#!/usr/bin/env bash` scripts).
+*.sh text eol=lf
+
+# YAML configs: LF for consistency across editors.
+*.yml text eol=lf
+*.yaml text eol=lf

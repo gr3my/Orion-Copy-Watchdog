@@ -1,0 +1,26 @@
+# Template systemd unit for Orion Copy Watchdog.
+# install.sh writes the live unit from these same values; this file documents them.
+# systemd keeps the WATCHDOG alive (Restart=on-failure); the watchdog keeps your
+# configured Orion services healthy.
+[Unit]
+Description=Orion Copy Watchdog - health monitor and automatic recovery
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=orion-watchdog
+Group=orion-watchdog
+ExecStart=/opt/orion-copy-watchdog/bin/orion-watchdog --config /etc/orion-copy-watchdog/watchdog.yml start
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/orion-copy-watchdog/state /etc/orion-copy-watchdog
+AmbientCapabilities=
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

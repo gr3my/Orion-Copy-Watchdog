@@ -1,0 +1,56 @@
+# Allocator-focused watchdog: HTTP health, agent TCP port, and heartbeat freshness.
+#
+# Heartbeat freshness uses the generic command check: point it at any script that
+# exits 0 when the allocator's last heartbeat is recent (e.g. by querying your
+# allocator's status endpoint and comparing timestamps).
+watchdog:
+  check_interval: 10s
+  failure_threshold: 3
+  recovery_timeout: 60s
+  restart_cooldown: 30s
+  state_directory: ./state
+  log_level: info
+  restart_policy:
+    max_restarts: 5
+    window: 10m
+  backoff:
+    enabled: true
+    initial: 5s
+    multiplier: 2
+    max: 2m
+
+services:
+  - name: Allocator
+    lifecycle: persistent
+    health_mode: all
+    checks:
+      - type: http
+        url: http://127.0.0.1:9095/health
+        expected_status: 200
+        timeout: 5s
+      - type: tcp
+        host: 127.0.0.1
+        port: 9100
+        timeout: 5s
+      - type: command
+        # Sample script included in this repo; adapt it to your allocator.
+        command: ./examples/scripts/check-allocator-heartbeat.sh
+        timeout: 10s
+    restart:
+      type: process
+      executable: ./Allocator/OrionAllocator
+      working_directory: ./Allocator
+      graceful_timeout: 15s
+
+  - name: Arena Match
+    lifecycle: dynamic
+    depends_on:
+      - Allocator
+    checks:
+      - type: process
+        process_name: ArenaServer
+      - type: tcp
+        host: 127.0.0.1
+        port: 7777
+    restart:
+      type: none

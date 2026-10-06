@@ -1,0 +1,39 @@
+# Windows host: backend + allocator as Windows services, game server as a process.
+watchdog:
+  check_interval: 10s
+  failure_threshold: 3
+  recovery_timeout: 90s
+  state_directory: ./state
+  log_level: info
+  log_file: logs/watchdog.log
+  restart_policy:
+    max_restarts: 5
+    window: 10m
+
+services:
+  - name: Orion Backend
+    checks:
+      - type: windows_service
+        service_name: OrionCopyServer
+      - type: http
+        url: http://127.0.0.1:8080/health
+        timeout: 5s
+    restart:
+      type: windows_service
+      service_name: OrionCopyServer
+      graceful_timeout: 30s
+
+  - name: Allocator
+    depends_on:
+      - Orion Backend
+    checks:
+      - type: process
+        process_name: OrionAllocator
+      - type: tcp
+        host: 127.0.0.1
+        port: 9100
+    restart:
+      type: process
+      executable: C:\Orion\Allocator\OrionAllocator.exe
+      working_directory: C:\Orion\Allocator
+      graceful_timeout: 15s

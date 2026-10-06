@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OrionCopy.Watchdog/OrionCopy.Watchdog.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OrionCopy.Watchdog.Tests/OrionCopy.Watchdog.Tests.csproj" />
+  </Folder>
+</Solution>

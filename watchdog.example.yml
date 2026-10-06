@@ -1,0 +1,122 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Orion Copy Watchdog — example configuration.
+#
+# Copy this file to `watchdog.yml` and edit it for YOUR servers:
+#
+#   Windows:  Copy-Item watchdog.example.yml watchdog.yml ; notepad watchdog.yml
+#   Linux:    cp watchdog.example.yml watchdog.yml && nano watchdog.yml
+#
+# Then validate and start:
+#
+#   orion-watchdog validate-config
+#   orion-watchdog start
+#
+# NEVER commit your real watchdog.yml if it contains private hostnames.
+# Secrets belong in environment variables referenced as ${VAR_NAME}.
+# ─────────────────────────────────────────────────────────────────────────────
+
+watchdog:
+  check_interval: 10s      # how often every service is probed
+  failure_threshold: 3     # consecutive failures before a service is UNHEALTHY
+  recovery_timeout: 60s    # max time for stop → start → verified healthy
+  restart_cooldown: 30s    # quiet period after a restart before the next one
+  startup_grace: 60s       # fresh processes get time to boot before verdicts
+  state_directory: ./state # restart counters survive watchdog restarts here
+  log_level: info          # debug | info | warn | error
+  log_file: logs/watchdog.log
+
+  restart_policy:
+    max_restarts: 5        # circuit breaker: give up after 5 restarts ...
+    window: 10m            # ... inside 10 minutes (then FAILED, needs `reset`)
+
+  backoff:
+    enabled: true
+    initial: 5s            # first restart is immediate; later ones wait 10s, 20s, 40s, ...
+    multiplier: 2
+    max: 2m                # ... never more than 2 minutes
+
+  auto_retry_failed: false # true = leave FAILED automatically once the window slides
+
+services:
+  # ── Your Orion Copy backend: process alive AND answering HTTP ──
+  - name: Orion Backend
+    lifecycle: persistent
+    health_mode: all
+    checks:
+      - type: process
+        process_name: OrionCopyServer
+      - type: http
+        url: http://127.0.0.1:8080/health
+        expected_status: 200
+        timeout: 5s
+    restart:
+      type: process
+      executable: C:\Orion\OrionCopyServer.exe
+      working_directory: C:\Orion
+      graceful_timeout: 15s
+
+  # ── Allocator: HTTP health plus its agent TCP port ──
+  - name: Allocator
+    lifecycle: persistent
+    depends_on:
+      - Orion Backend
+    checks:
+      - type: http
+        url: http://127.0.0.1:9095/health
+        timeout: 5s
+      - type: tcp
+        host: 127.0.0.1
+        port: 9100
+        timeout: 5s
+    restart:
+      type: command
+      # Sample script included in this repo; point it at your own launcher.
+      start_command: ./examples/scripts/start-allocator.sh
+      working_directory: /opt/orion
+      graceful_timeout: 15s
+
+  # ── Persistent lounge server (always expected to be up) ──
+  - name: Persistent Lounge
+    lifecycle: persistent
+    depends_on:
+      - Allocator
+    checks:
+      - type: tcp
+        host: 127.0.0.1
+        port: 7777
+    restart:
+      type: process
+      executable: ./ArenaServer
+      arguments: -port=7777 -lounge
+      graceful_timeout: 20s
+
+  # ── Temporary match instance: an expected stop is NOT a failure ──
+  - name: Arena Match
+    lifecycle: dynamic
+    depends_on:
+      - Allocator
+    checks:
+      - type: process
+        process_name: ArenaServer
+      - type: tcp
+        host: 127.0.0.1
+        port: 7778
+    restart:
+      type: none # dynamic instances are spawned by the allocator, not the watchdog
+
+notifications:
+  webhook:
+    enabled: false
+    # The `:-` default keeps validation green while notifications stay disabled.
+    # Set ORION_WATCHDOG_WEBHOOK in your environment when you enable this.
+    url: ${ORION_WATCHDOG_WEBHOOK:-}
+    timeout: 10s
+
+# Optional: report health to your Orion Copy Server dashboard.
+# The watchdog works perfectly with this disabled.
+reporting:
+  enabled: false
+  api_url: ${ORION_API_URL:-}
+  api_key: ${ORION_WATCHDOG_API_KEY:-}
+  interval: 60s
+  timeout: 10s

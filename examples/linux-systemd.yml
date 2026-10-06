@@ -1,0 +1,37 @@
+# Linux host: everything as systemd units.
+watchdog:
+  check_interval: 10s
+  failure_threshold: 3
+  recovery_timeout: 90s
+  state_directory: /var/lib/orion-copy-watchdog/state
+  log_level: info
+  restart_policy:
+    max_restarts: 5
+    window: 10m
+
+services:
+  - name: Orion Backend
+    checks:
+      - type: systemd
+        service_name: orion-copy-server
+      - type: http
+        url: http://127.0.0.1:8080/health
+        timeout: 5s
+    restart:
+      type: systemd
+      service_name: orion-copy-server
+      graceful_timeout: 30s
+
+  - name: Allocator
+    depends_on:
+      - Orion Backend
+    checks:
+      - type: systemd
+        service_name: orion-allocator
+      - type: tcp
+        host: 127.0.0.1
+        port: 9100
+    restart:
+      type: systemd
+      service_name: orion-allocator
+      graceful_timeout: 30s

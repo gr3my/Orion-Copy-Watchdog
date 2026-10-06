@@ -1,0 +1,95 @@
+# Full stack: backend → allocator → persistent lounge + dynamic matches + dashboard.
+#
+# Recovery order follows depends_on: if the backend is down, the allocator and
+# game servers hold instead of restart-storming against a dead dependency.
+watchdog:
+  check_interval: 10s
+  failure_threshold: 3
+  recovery_timeout: 90s
+  restart_cooldown: 30s
+  startup_grace: 90s
+  state_directory: ./state
+  log_level: info
+  log_file: logs/watchdog.log
+  restart_policy:
+    max_restarts: 5
+    window: 10m
+  backoff:
+    enabled: true
+    initial: 5s
+    multiplier: 2
+    max: 2m
+
+services:
+  - name: Orion Backend
+    lifecycle: persistent
+    checks:
+      - type: process
+        process_name: OrionCopyServer
+      - type: http
+        url: http://127.0.0.1:8080/health
+        timeout: 5s
+    restart:
+      type: systemd
+      service_name: orion-copy-server
+      graceful_timeout: 30s
+
+  - name: Allocator
+    lifecycle: persistent
+    depends_on:
+      - Orion Backend
+    checks:
+      - type: http
+        url: http://127.0.0.1:9095/health
+        timeout: 5s
+      - type: tcp
+        host: 127.0.0.1
+        port: 9100
+    restart:
+      type: systemd
+      service_name: orion-allocator
+      graceful_timeout: 30s
+
+  - name: Persistent Lounge
+    lifecycle: persistent
+    depends_on:
+      - Allocator
+    checks:
+      - type: tcp
+        host: 127.0.0.1
+        port: 7777
+    restart:
+      type: process
+      executable: ./ArenaServer
+      arguments: -port=7777 -lounge
+      graceful_timeout: 20s
+
+  - name: Dashboard
+    lifecycle: persistent
+    checks:
+      - type: http
+        url: http://127.0.0.1:3000/
+        expected_status: 200
+        timeout: 5s
+    restart:
+      type: systemd
+      service_name: orion-dashboard
+      graceful_timeout: 30s
+
+  - name: Arena Match
+    lifecycle: dynamic
+    depends_on:
+      - Allocator
+    checks:
+      - type: process
+        process_name: ArenaServer
+      - type: tcp
+        host: 127.0.0.1
+        port: 7778
+    restart:
+      type: none
+
+notifications:
+  webhook:
+    enabled: false
+    url: ${ORION_WATCHDOG_WEBHOOK:-}
